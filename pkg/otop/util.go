@@ -1,6 +1,10 @@
 package otop
 
-import "fmt"
+import (
+	"fmt"
+
+	gc "github.com/rthornton128/goncurses"
+)
 
 // printTabs
 // Utility method for printing tabs. Will throw an error if there are too many
@@ -10,8 +14,8 @@ import "fmt"
 // Errors:
 //    WindowTooSmallError
 func (o *Otop) printTabs(tabRange []int) error {
-	maxY, maxX := o.MaxYX()
-	o.Move(tabTop, 1)
+	maxY, _ := o.MaxYX()
+	o.Move(tabTop, 0)
 
 	if maxY <= 5 {
 		return nil
@@ -21,31 +25,25 @@ func (o *Otop) printTabs(tabRange []int) error {
 		return fmt.Errorf("No tabs")
 	}
 
-	if tabRange[0] > 0 && maxX > len(o.Tabs[tabRange[0]].Name())+10 {
-		o.Print("... ")
-	}
-
 	for _, tab := range tabRange {
-		_, x := o.YX()
-		if x+len(o.Tabs[tab].Name()) > maxX-1 {
-			return fmt.Errorf("Too many tabs for window size.")
-		}
 		if tab == o.activeTab {
 			o.ColorOn(colorSelect)
-			o.Print(o.Tabs[tab].Name())
+			o.Print(fmt.Sprintf(" %s  ", o.Tabs[tab].Name()))
 			o.ColorOff(colorSelect)
 		} else {
-			o.Print(o.Tabs[tab].Name())
+			o.Print(fmt.Sprintf(" %s  ", o.Tabs[tab].Name()))
 		}
 	}
 
-	if tabRange[len(tabRange)-1] < len(o.Tabs)-1 && maxX > len(o.Tabs[tabRange[0]].Name())+10 {
-		o.Print(" ...")
+	o.Tabs[o.activeTab].Top()
+
+	if err := o.Tabs[o.activeTab].Redraw(); err != nil {
+		return err
 	}
 
-	o.MovePrint(10, 10, o.OpenShift.GetPods())
+	gc.UpdatePanels()
+	gc.Update()
 
-	o.Refresh()
 	return nil
 }
 

@@ -1,9 +1,11 @@
 package cmd
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
+	"strings"
 
 	"github.com/oatmealraisin/gopenshift/pkg/gopenshift"
 	"github.com/oatmealraisin/otop/pkg/otop"
@@ -20,13 +22,12 @@ const (
 )
 
 type OtopCmd struct {
-	// TODO: Rename this something sensible
-	Thing *otop.Otop
+	FrontEnd *otop.Otop
 }
 
 func NewCmdOtop() *cobra.Command {
 	ocmd := &OtopCmd{
-		Thing: &otop.Otop{},
+		FrontEnd: &otop.Otop{},
 	}
 
 	command := &cobra.Command{
@@ -38,11 +39,16 @@ func NewCmdOtop() *cobra.Command {
 			}
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return ocmd.Run()
+			err := ocmd.Run()
+			if err != nil && strings.Contains(err.Error(), "connection refused") {
+				fmt.Println("Could not connect to OpenShift server.")
+				return nil
+			}
+			return err
 		},
 	}
 
-	ocmd.Thing.OpenShift = gopenshift.New()
+	ocmd.FrontEnd.OpenShift = gopenshift.New()
 
 	return command
 }
@@ -53,18 +59,18 @@ func (cmd OtopCmd) Run() error {
 	}
 
 	// For ease of reading/writing
-	thing := cmd.Thing
+	front := cmd.FrontEnd
 
 	// Initialize goncurses. It's essential End() is called to ensure the
 	// terminal isn't altered after the program ends
-	mw, err := gc.Init()
+	mainWindow, err := gc.Init()
 	if err != nil {
 		return err
 	}
 
-	thing.Window = mw
+	front.Window = mainWindow
 
-	// We need to catch ctrl+c
+	// We need to catch ctrl+c so that gc doesn't mess up the terminal
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt)
 	go func() {
@@ -75,7 +81,7 @@ func (cmd OtopCmd) Run() error {
 
 	defer gc.End()
 
-	return thing.Run()
+	return front.Run()
 }
 
 func (o OtopCmd) CheckInput() error {

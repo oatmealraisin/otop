@@ -2,21 +2,13 @@ package otop
 
 import (
 	"fmt"
-	"log"
+	"time"
 
 	"github.com/oatmealraisin/gopenshift/pkg/gopenshift"
 	gc "github.com/rthornton128/goncurses"
 )
 
 const (
-	colorDefault int16 = 0
-	colorLow     int16 = 1
-	colorMed     int16 = 2
-	colorHigh    int16 = 3
-	colorSelect  int16 = 4
-	colorWarn    int16 = 8
-	colorError   int16 = 9
-
 	headerTop    = 0
 	headerLeft   = 0
 	tabTop       = 0
@@ -24,36 +16,6 @@ const (
 	displayTop   = 1
 	displayLeft  = 0
 	footerHeight = 1
-
-	quitKey       = 'q'
-	helpKey       = 'H'
-	leftKey       = 'h'
-	rightKey      = 'l'
-	upKey         = 'k'
-	doubleUpKey   = 'K'
-	downKey       = 'j'
-	doubleDownKey = 'J'
-	sortKey       = 's'
-	explainKey    = '?'
-	editKey       = 'e'
-	selectKey     = gc.KEY_RETURN
-)
-
-var (
-	tabNames = []string{
-		" Apps     ",
-		" Pods     ",
-		" Builds   ",
-		" Deploys  ",
-		" Services ",
-	}
-
-	Control = map[gc.Key](func(o *Otop) error){
-		quitKey:  exitFunction,
-		helpKey:  showHelp,
-		leftKey:  moveTabLeft,
-		rightKey: moveTabRight,
-	}
 )
 
 type ExitApplication struct{}
@@ -69,23 +31,35 @@ type Otop struct {
 
 	Tabs []*Tab
 
-	OpenShift  *gopenshift.OpenShift
-	HelpPanel  *gc.Panel
+	OpenShift *gopenshift.OpenShift
+	HelpPanel *gc.Panel
+
+	// The Controller is a map of keys to functions that handle the keypresses.
+	// This cleans up the massive case structure that we used to use for
+	// keypresses. The current bindings can be found in defs.go
 	Controller map[gc.Key](func(o *Otop) error)
 
-	User         string
+	User string
+
+	// The index of the currently shown tab
 	activeTab    int
 	resourceMode bool
 }
 
 func exitFunction(o *Otop) error { return &ExitApplication{} }
 
-// Run contains control logic for keypresses, orchestrating proper tasks
+// Run initializes otop, then listens for key events. Each key contains a
+// function for the resulting action, which may return an error.
 func (o *Otop) Run() error {
 
 	if err := o.init(); err != nil {
 		return err
 	}
+
+	exitChan := make(chan bool)
+	defer func() { exitChan <- true }()
+
+	go o.refresh(exitChan)
 
 	for {
 		execKey := o.Controller[gc.Key(o.GetChar())]
@@ -106,13 +80,37 @@ func (o *Otop) Run() error {
 	return nil
 }
 
+func (o *Otop) refresh(exit chan bool) {
+	tick := time.NewTicker(time.Second / 10).C
+	for {
+		select {
+		case <-exit:
+			return
+		case <-tick:
+			o.Tabs[o.activeTab].Update(o.OpenShift)
+			o.Tabs[o.activeTab].Redraw()
+			gc.UpdatePanels()
+			gc.Update()
+		}
+	}
+}
+
 // Utility method for initialization steps
 func (o *Otop) init() error {
-	maxY, maxX := o.MaxYX()
+	user, err := o.OpenShift.WhoAmI()
+	if err != nil {
+		return err
+	}
+
+	project, err := o.OpenShift.Project()
+	if err != nil {
+		return err
+	}
 
 	if o.Controller == nil {
 		o.Controller = Control
 	}
+
 	// Initializing our colors
 	// TODO: Handle colorless terminal
 	if err := gc.StartColor(); err != nil {
@@ -132,9 +130,11 @@ func (o *Otop) init() error {
 	// Initialize colors
 	gc.InitPair(colorDefault, -1, -1)
 	gc.InitPair(colorLow, gc.C_BLACK, gc.C_WHITE)
-	gc.InitPair(colorMed, -1, gc.C_BLUE)
+	gc.InitPair(colorMed, -1, gc.C_YELLOW)
 	gc.InitPair(colorHigh, gc.C_BLACK, gc.C_RED)
 	gc.InitPair(colorSelect, -1, gc.C_BLUE)
+	gc.InitPair(colorHeader, gc.C_BLACK, gc.C_GREEN)
+	gc.InitPair(colorTab, -1, gc.C_BLUE)
 	gc.InitPair(colorError, gc.C_BLACK, gc.C_WHITE)
 
 	o.SetBackground(gc.ColorPair(colorDefault))
@@ -145,32 +145,25 @@ func (o *Otop) init() error {
 	//o.HelpPanel = hp
 	//o.HelpPanel.Hide()
 
-	user, err := o.OpenShift.WhoAmI()
-	if err != nil {
-		return err
-	}
-
-	project, err := o.OpenShift.Project()
-	if err != nil {
-		return err
-	}
-
-	o.ColorOn(colorMed)
+	o.ColorOn(colorTab)
 	if err := o.printFooter(user, project); err != nil {
 		return err
 	}
-	o.ColorOff(colorMed)
+	o.ColorOff(colorTab)
 
-	for _, t := range tabNames {
-		tab := NewTab(t, o.Sub(maxY-footerHeight-displayTop, maxX-displayLeft, displayTop, displayLeft))
-		tab.Hide()
-		o.Tabs = append(o.Tabs, tab)
+	maxY, maxX := o.MaxYX()
+	for _, tab := range Tabs {
+		if win, err := gc.NewWindow(maxY-footerHeight-displayTop, maxX-displayLeft, displayTop, displayLeft); err == nil {
+			t := tab(win)
+			t.Update(o.OpenShift)
+			t.Initialize()
+			o.Tabs = append(o.Tabs, t)
+		}
 	}
 
-	o.Tabs[2].Window().MovePrint(3, 3, "Hello world!")
-
+	// Draw all tabs
 	if err := o.moveTab(0); err != nil {
-		log.Fatal(err)
+		return err
 	}
 
 	return nil
@@ -256,7 +249,12 @@ func showHelp(o *Otop) error {
 		if err := o.Touch(); err != nil {
 			return err
 		}
-		o.Refresh()
+
+		// TODO: Need to redraw covered things
+		o.Tabs[o.activeTab].Update(o.OpenShift)
+		o.Tabs[o.activeTab].Redraw()
+		gc.UpdatePanels()
+		gc.Update()
 
 		if err := w.Delete(); err != nil {
 			return err
