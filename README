@@ -1,0 +1,14 @@
+= otop
+
+== Command Line OpenShift Monitor
+
+=== Installation
+
+==== Fedora
+`sudo dnf install ncurses ncurses-libs ncurses-devel rubygem-pkg-config`
+`go get github.com/rthornton128/goncurses`
+`go get github.com/oatmealraisin/otop/cmd/otop`
+
+=== Usage
+
+`otop`
