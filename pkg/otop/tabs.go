@@ -18,10 +18,6 @@ type Tab struct {
 	activeEntry int
 	// entries contains each element of the tab for display
 	entries []map[string]string
-	// Initialize contains logic for a Tab that is just started. Normally, this
-	// just initializes the Header bar with the proper columns, then calls
-	// Update and Redraw for the first time.
-	Initialize func() error
 	// Update is called periodically to refresh information in the tab. This is
 	// where a tab should retrieve information to the server, and sort it into
 	// entries.

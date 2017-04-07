@@ -12,18 +12,16 @@ func NewBuildsTab(w *gc.Window) *Tab {
 	maxY, maxX := w.MaxYX()
 	subWindow := w.Sub(maxY-1, maxX-1, 2, 0)
 
+	w.Clear()
+	w.ColorOn(colorHeader)
+	w.HLine(0, 0, ' ', maxX)
+	w.MovePrint(0, 0, " Name")
+	w.ColorOff(colorHeader)
+
 	t = &Tab{
 		Panel:   panel,
 		name:    "Builds",
 		entries: e,
-		Initialize: func() error {
-			w.Clear()
-			w.ColorOn(colorHeader)
-			w.HLine(0, 0, ' ', maxX)
-			w.MovePrint(0, 0, " Name")
-			w.ColorOff(colorHeader)
-			return nil
-		},
 		Redraw: func() error {
 			subWindow.Clear()
 			subMaxY, _ := subWindow.MaxYX()
@@ -49,6 +47,10 @@ func NewBuildsTab(w *gc.Window) *Tab {
 				e = append(e, map[string]string{
 					"NAME": build.Name,
 				})
+			}
+
+			if err := w.Touch(); err != nil {
+				return err
 			}
 
 			return nil

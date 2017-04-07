@@ -11,22 +11,27 @@ func NewServicesTab(w *gc.Window) *Tab {
 	var t *Tab
 	maxY, maxX := w.MaxYX()
 	subWindow := w.Sub(maxY-1, maxX-1, 2, 0)
+	separators := []int{
+		0,  // the start
+		30, // Name
+		40, // Type
+		60, // Cluster IP
+		80, // Ports
+	}
+
+	w.Clear()
+	w.ColorOn(colorHeader)
+	w.HLine(0, 0, ' ', maxX)
+	w.MovePrint(0, separators[0], " Name")
+	w.MovePrint(0, separators[1], " Type")
+	w.MovePrint(0, separators[2], " Cluster IP")
+	w.MovePrint(0, separators[3], " Ports")
+	w.ColorOff(colorHeader)
 
 	t = &Tab{
 		Panel:   panel,
 		name:    "Services",
 		entries: e,
-		Initialize: func() error {
-			w.Clear()
-			w.ColorOn(colorHeader)
-			w.HLine(0, 0, ' ', maxX)
-			w.MovePrint(0, 0, " Name")
-			w.MovePrint(0, 15, " Type")
-			w.MovePrint(0, 20, " Cluster IP")
-			w.MovePrint(0, 30, " Ports")
-			w.ColorOff(colorHeader)
-			return nil
-		},
 		Redraw: func() error {
 			subWindow.Clear()
 			subMaxY, _ := subWindow.MaxYX()
@@ -35,11 +40,15 @@ func NewServicesTab(w *gc.Window) *Tab {
 					return nil
 				}
 
-				subWindow.MovePrint(i, 0, " "+entry["NAME"])
-				subWindow.MovePrint(i, 15, " "+entry["TYPE"])
-				subWindow.MovePrint(i, 20, " "+entry["CLUSTER-IP"])
-				subWindow.MovePrint(i, 30, " "+entry["PORTS"])
+				subWindow.MovePrint(i, separators[0], " "+entry["NAME"])
+				subWindow.MovePrint(i, separators[1], " "+entry["TYPE"])
+				subWindow.MovePrint(i, separators[2], " "+entry["CLUSTER-IP"])
+				subWindow.MovePrint(i, separators[3], " "+entry["PORTS"])
 				i++
+			}
+
+			if err := w.Touch(); err != nil {
+				return err
 			}
 
 			return nil

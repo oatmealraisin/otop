@@ -2,6 +2,7 @@ package otop
 
 import (
 	"fmt"
+	"io"
 	"time"
 
 	"github.com/oatmealraisin/gopenshift/pkg/gopenshift"
@@ -29,28 +30,34 @@ func (e *ExitApplication) Error() string { return "" }
 type Otop struct {
 	*gc.Window
 
+	// The list of tabs for ResourceMode
 	Tabs []*Tab
 
-	OpenShift *gopenshift.OpenShift
+	// A panel that is preloaded to quickly show what the current keybindings are
 	HelpPanel *gc.Panel
 
-	// The Controller is a map of keys to functions that handle the keypresses.
-	// This cleans up the massive case structure that we used to use for
-	// keypresses. The current bindings can be found in defs.go
-	Controller map[gc.Key](func(o *Otop) error)
+	// Our OpenShift client that is used to interact with the API
+	OpenShift *gopenshift.OpenShift
 
 	User string
 
-	// The index of the currently shown tab
-	activeTab    int
-	resourceMode bool
+	// The current mode that the user is in. See pkg/otop/modes.go for more info
+	Mode *Mode
+
+	// The writer that otop will write logs to, since we can't just write them
+	// to STDOUT meaningfully
+	w io.Writer
 }
 
 func exitFunction(o *Otop) error { return &ExitApplication{} }
 
 // Run initializes otop, then listens for key events. Each key contains a
 // function for the resulting action, which may return an error.
-func (o *Otop) Run() error {
+func (o *Otop) Run(w io.Writer) error {
+	if w != nil {
+		o.w = w
+		fmt.Fprint(o.w, "Initialized log writer")
+	}
 
 	if err := o.init(); err != nil {
 		return err
@@ -59,10 +66,20 @@ func (o *Otop) Run() error {
 	exitChan := make(chan bool)
 	defer func() { exitChan <- true }()
 
-	go o.refresh(exitChan)
+	// Set up a consistent refresh rate
+	// TODO: Make a command line argument
+	frameRate := int64(10)
+	go refresh(o, exitChan, frameRate)
 
 	for {
-		execKey := o.Controller[gc.Key(o.GetChar())]
+		// To see all keybindings, check out pkg/otop/defs.go
+		keyEvent := gc.Key(o.GetChar())
+		execKey := o.Mode.Controller[keyEvent]
+
+		//if execKey == nil {
+		//	execKey := o.Tabs[o.activeTab].Events[keyEvent]
+		//}
+
 		if execKey == nil {
 			continue
 		}
@@ -80,15 +97,21 @@ func (o *Otop) Run() error {
 	return nil
 }
 
-func (o *Otop) refresh(exit chan bool) {
-	tick := time.NewTicker(time.Second / 10).C
+// TODO: Handle window resizing
+func refresh(o *Otop, exit chan bool, frameRate int64) {
+	tick := time.NewTicker(time.Second / time.Duration(frameRate)).C
 	for {
 		select {
 		case <-exit:
 			return
 		case <-tick:
-			o.Tabs[o.activeTab].Update(o.OpenShift)
-			o.Tabs[o.activeTab].Redraw()
+			if o.w != nil {
+				fmt.Fprint(o.w, "TICK")
+			}
+			o.Mode.Tabs[o.Mode.ActiveTab].Top()
+			o.Mode.Tabs[o.Mode.ActiveTab].Update(o.OpenShift)
+			o.Mode.Tabs[o.Mode.ActiveTab].Redraw()
+
 			gc.UpdatePanels()
 			gc.Update()
 		}
@@ -96,6 +119,9 @@ func (o *Otop) refresh(exit chan bool) {
 }
 
 // Utility method for initialization steps
+// NOTE: For now, this method doesn't take very long and doesn't effect start up
+// time. However, if it starts to take longer, we may want to look into changing
+// this to only initialize the first tab opened.
 func (o *Otop) init() error {
 	user, err := o.OpenShift.WhoAmI()
 	if err != nil {
@@ -107,8 +133,8 @@ func (o *Otop) init() error {
 		return err
 	}
 
-	if o.Controller == nil {
-		o.Controller = Control
+	if o.Mode == nil {
+		o.Mode = &ResourceMode
 	}
 
 	// Initializing our colors
@@ -145,23 +171,23 @@ func (o *Otop) init() error {
 	//o.HelpPanel = hp
 	//o.HelpPanel.Hide()
 
-	o.ColorOn(colorTab)
 	if err := o.printFooter(user, project); err != nil {
 		return err
 	}
-	o.ColorOff(colorTab)
 
+	// TODO: Figure out how to best initialize tabs into modes
 	maxY, maxX := o.MaxYX()
+
 	for _, tab := range Tabs {
 		if win, err := gc.NewWindow(maxY-footerHeight-displayTop, maxX-displayLeft, displayTop, displayLeft); err == nil {
 			t := tab(win)
+			// Update all tabs so that the initial tab-switch doesn't take forever
 			t.Update(o.OpenShift)
-			t.Initialize()
-			o.Tabs = append(o.Tabs, t)
+			o.Mode.Tabs = append(o.Mode.Tabs, t)
 		}
 	}
 
-	// Draw all tabs
+	// Draw the initial tab
 	if err := o.moveTab(0); err != nil {
 		return err
 	}
@@ -174,93 +200,25 @@ func (o *Otop) init() error {
 // it will either
 //   a) Hide the furthest tab and show a closer tab
 //   b) Move to the first/last tab
+// TODO: Display only visible tabs on smaller screens
 func (o *Otop) moveTab(amount int) error {
+	// for shorthand
+	mode := o.Mode
+
 	// Calculate the new position of the activeTab
-	if o.activeTab+amount < 0 {
-		amount += o.activeTab
+	if mode.ActiveTab+amount < 0 {
+		amount += mode.ActiveTab
 		amount++
-		o.activeTab = len(o.Tabs) - 1
+		mode.ActiveTab = len(mode.Tabs) - 1
 	}
 
-	if o.activeTab+amount > len(o.Tabs)-1 {
-		amount -= (len(o.Tabs) - o.activeTab - 1)
+	if mode.ActiveTab+amount > len(mode.Tabs)-1 {
+		amount -= (len(mode.Tabs) - mode.ActiveTab - 1)
 		amount--
-		o.activeTab = 0
+		mode.ActiveTab = 0
 	}
 
-	o.activeTab += amount
+	mode.ActiveTab += amount
 
-	// TODO: Display only visible tabs on smaller screens
-	selection := []int{}
-	for i, _ := range o.Tabs {
-		selection = append(selection, i)
-	}
-
-	return o.printTabs(selection)
-	// Get the set of displayed tabs
-	//maxY, maxX := o.MaxYX()
-
-}
-
-//. TODO: Take into account too many tabs for screen
-func moveTabLeft(o *Otop) error {
-	return o.moveTab(-1)
-}
-
-//. TODO: Take into account too many tabs for screen
-func moveTabRight(o *Otop) error {
-	return o.moveTab(1)
-}
-
-func showHelp(o *Otop) error {
-	maxY, maxX := o.MaxYX()
-
-	if maxY > 10 && maxY > 10 {
-		w := o.Sub(maxY-10, maxX-10, 5, 5)
-
-		if err := w.Touch(); err != nil {
-			return err
-		}
-
-		if err := w.Keypad(true); err != nil {
-			return err
-		}
-
-		w.Border(gc.ACS_VLINE, gc.ACS_VLINE, gc.ACS_HLINE, gc.ACS_HLINE,
-			gc.ACS_ULCORNER, gc.ACS_URCORNER, gc.ACS_LLCORNER, gc.ACS_LRCORNER)
-		w.AttrOn(gc.A_UNDERLINE)
-		w.MovePrintf(1, 1, "Help ")
-		w.AttrOff(gc.A_UNDERLINE)
-
-		maxY, maxX := w.MaxYX()
-
-		for i, s := range []string{
-			fmt.Sprintf("%c/%c, Left/Right : Change tab", leftKey, rightKey),
-			fmt.Sprintf("%c/%c, Up/Down    : Select resource", upKey, downKey),
-			fmt.Sprintf("%c               : Exit otop", quitKey),
-			fmt.Sprintf("%c               : Explain resource", explainKey),
-		} {
-			if i+3 < maxY && len(s)+2 < maxX {
-				w.MovePrint(i+3, 2, s)
-			}
-		}
-		w.GetChar()
-		w.Clear()
-		if err := o.Touch(); err != nil {
-			return err
-		}
-
-		// TODO: Need to redraw covered things
-		o.Tabs[o.activeTab].Update(o.OpenShift)
-		o.Tabs[o.activeTab].Redraw()
-		gc.UpdatePanels()
-		gc.Update()
-
-		if err := w.Delete(); err != nil {
-			return err
-		}
-
-	}
-
-	return nil
+	return o.printTabs()
 }

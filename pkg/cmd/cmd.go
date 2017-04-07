@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"os/signal"
@@ -17,12 +18,13 @@ const (
 	// TODO: Finish these
 	cliExplain = `TODO`
 	cliLong    = `TODO`
-	cliShort   = `OpenShift cluster viewer`
+	cliShort   = `OpenShift Resource Monitor`
 	cliUse     = `otop`
 )
 
 type OtopCmd struct {
 	FrontEnd *otop.Otop
+	LogsFile string
 }
 
 func NewCmdOtop() *cobra.Command {
@@ -48,6 +50,8 @@ func NewCmdOtop() *cobra.Command {
 		},
 	}
 
+	command.Flags().StringVar(&ocmd.LogsFile, "logs", "", "File to output logs to.")
+
 	ocmd.FrontEnd.OpenShift = gopenshift.New()
 
 	return command
@@ -56,6 +60,16 @@ func NewCmdOtop() *cobra.Command {
 func (cmd OtopCmd) Run() error {
 	if err := cmd.CheckInput(); err != nil {
 		return err
+	}
+
+	var logFile io.Writer
+	// TODO: Make this better
+	if cmd.LogsFile != "" {
+		logFile, err := os.Create(cmd.LogsFile)
+		if err != nil {
+			return err
+		}
+		defer logFile.Close()
 	}
 
 	// For ease of reading/writing
@@ -81,9 +95,10 @@ func (cmd OtopCmd) Run() error {
 
 	defer gc.End()
 
-	return front.Run()
+	return front.Run(logFile)
 }
 
 func (o OtopCmd) CheckInput() error {
+	// TODO: Check if o.LogFile is a valid file, no windows support
 	return nil
 }

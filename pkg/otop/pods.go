@@ -10,33 +10,43 @@ func NewPodsTab(w *gc.Window) *Tab {
 	panel := gc.NewPanel(w)
 	var t *Tab
 	maxY, maxX := w.MaxYX()
-	subWindow := w.Sub(maxY-1, maxX-1, 2, 0)
+	subWindow := w.Sub(maxY-2, maxX-1, 2, 0)
+
+	separators := []int{
+		0,  // the start
+		40, // Name
+		60, // Status
+	}
+
+	w.Clear()
+	w.ColorOn(colorHeader)
+	w.HLine(0, 0, ' ', maxX)
+	w.MovePrint(0, separators[0], " Name")
+	w.MovePrint(0, separators[1], " Phase")
+	w.ColorOff(colorHeader)
 
 	// See Tab struct in pkg/otop/tabs.go for more information
 	t = &Tab{
 		Panel:   panel,
 		name:    "Pods",
 		entries: e,
-		Initialize: func() error {
-			w.Clear()
-			w.ColorOn(colorHeader)
-			w.HLine(0, 0, ' ', maxX)
-			w.MovePrint(0, 0, " Name")
-			w.MovePrint(0, 15, " Phase")
-			w.ColorOff(colorHeader)
-			return nil
-		},
 		Redraw: func() error {
+
 			subWindow.Clear()
 			subMaxY, _ := subWindow.MaxYX()
 			for i, entry := range e {
+
 				if i >= subMaxY {
 					return nil
 				}
 
-				subWindow.MovePrint(i, 0, " "+entry["NAME"])
-				subWindow.MovePrint(i, 15, " "+entry["PHASE"])
+				subWindow.MovePrint(i, separators[0], " "+entry["NAME"])
+				subWindow.MovePrint(i, separators[1], " "+entry["PHASE"])
 				i++
+			}
+
+			if err := w.Touch(); err != nil {
+				return err
 			}
 
 			return nil
@@ -50,8 +60,9 @@ func NewPodsTab(w *gc.Window) *Tab {
 			e = []map[string]string{}
 			for _, pod := range pods {
 				e = append(e, map[string]string{
-					"NAME":  pod.Name,
-					"PHASE": string(pod.Status.Phase),
+					"NAME":       pod.Name,
+					"PHASE":      string(pod.Status.Phase),
+					"START_TIME": pod.Status.StartTime.String(),
 				})
 			}
 

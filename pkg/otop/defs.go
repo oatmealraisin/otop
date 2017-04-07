@@ -31,21 +31,44 @@ const (
 )
 
 var (
-	Control = map[gc.Key](func(o *Otop) error){
+	ResourceModeController map[gc.Key](func(o *Otop) error)
+	OverviewModeController map[gc.Key](func(o *Otop) error)
+
+	Tabs = []func(*gc.Window) *Tab{
+		NewPodsTab,
+		NewBuildsTab,
+		NewDeploymentConfigsTab,
+		NewRoutesTab,
+		NewServicesTab,
+	}
+)
+
+func init() {
+	OverviewModeController = map[gc.Key](func(o *Otop) error){
+		quitKey: exitFunction,
+		helpKey: showHelp,
+		'r':     modeSwitchResource,
+	}
+
+	OverviewMode = Mode{
+		ActiveTab:  0,
+		Controller: OverviewModeController,
+		Tabs:       []*Tab{},
+	}
+
+	ResourceModeController = map[gc.Key](func(o *Otop) error){
 		quitKey:      exitFunction,
 		helpKey:      showHelp,
 		leftKey:      moveTabLeft,
 		rightKey:     moveTabRight,
+		'o':          modeSwitchOverview,
 		gc.KEY_LEFT:  moveTabLeft,
 		gc.KEY_RIGHT: moveTabRight,
 	}
 
-	Tabs = []func(*gc.Window) *Tab{
-		NewPodsTab,
-		NewDeploymentsTab,
-		NewBuildsTab,
-		NewRoutesTab,
-		NewServicesTab,
-		NewDeploymentConfigsTab,
+	ResourceMode = Mode{
+		ActiveTab:  0,
+		Controller: ResourceModeController,
+		Tabs:       []*Tab{},
 	}
-)
+}
