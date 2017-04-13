@@ -1,0 +1,5 @@
+d   $ORIGIN_DATA_DIR - - - - -
+d   /var/lib/cni - - - - -
+d   /var/run/secrets - - - - -
+d   $ORIGIN_CONFIG_DIR/sdn - - - - -
+d   $ORIGIN_CONFIG_DIR/cloudprovider  - - - - -
