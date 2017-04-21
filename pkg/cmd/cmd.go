@@ -71,7 +71,6 @@ func (cmd OtopCmd) Run() error {
 		}
 		defer logFile.Close()
 	}
-
 	// For ease of reading/writing
 	front := cmd.FrontEnd
 

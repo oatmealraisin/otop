@@ -23,12 +23,14 @@ var (
 )
 
 func modeSwitchOverview(o *Otop) error {
-	o.Mode.Controller = OverviewModeController
+	o.Mode = &OverviewMode
+	o.moveTab(0)
 	return nil
 }
 
 func modeSwitchResource(o *Otop) error {
-	o.Mode.Controller = ResourceModeController
+	o.Mode = &ResourceMode
+	o.moveTab(0)
 	return nil
 }
 

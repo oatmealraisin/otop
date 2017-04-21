@@ -123,6 +123,7 @@ func refresh(o *Otop, exit chan bool, frameRate int64) {
 // time. However, if it starts to take longer, we may want to look into changing
 // this to only initialize the first tab opened.
 func (o *Otop) init() error {
+	fmt.Println("Initializing")
 	user, err := o.OpenShift.WhoAmI()
 	if err != nil {
 		return err
@@ -157,7 +158,7 @@ func (o *Otop) init() error {
 	gc.InitPair(colorDefault, -1, -1)
 	gc.InitPair(colorLow, gc.C_BLACK, gc.C_WHITE)
 	gc.InitPair(colorMed, -1, gc.C_YELLOW)
-	gc.InitPair(colorHigh, gc.C_BLACK, gc.C_RED)
+	gc.InitPair(colorHigh, gc.C_RED, -1)
 	gc.InitPair(colorSelect, -1, gc.C_BLUE)
 	gc.InitPair(colorHeader, gc.C_BLACK, gc.C_GREEN)
 	gc.InitPair(colorTab, -1, gc.C_BLUE)
@@ -186,6 +187,9 @@ func (o *Otop) init() error {
 			o.Mode.Tabs = append(o.Mode.Tabs, t)
 		}
 	}
+
+	ovWin, _ := gc.NewWindow(maxY-footerHeight-displayTop, maxX-displayLeft, displayTop, displayLeft)
+	OverviewMode.Tabs = append(OverviewMode.Tabs, NewOverviewTab(ovWin))
 
 	// Draw the initial tab
 	if err := o.moveTab(0); err != nil {

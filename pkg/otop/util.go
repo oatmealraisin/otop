@@ -2,6 +2,11 @@ package otop
 
 import (
 	"fmt"
+	"regexp"
+	"strings"
+	"time"
+
+	"k8s.io/kubernetes/pkg/api/unversioned"
 
 	gc "github.com/rthornton128/goncurses"
 )
@@ -21,6 +26,10 @@ func (o *Otop) printTabs() error {
 
 	if len(o.Mode.Tabs) == 0 {
 		return fmt.Errorf("No tabs")
+	}
+
+	if err := o.ClearToEOL(); err != nil {
+		return err
 	}
 
 	// Print each tab name, highlight the active tab
@@ -140,4 +149,23 @@ func showHelp(o *Otop) error {
 	}
 
 	return nil
+}
+
+var secondsTrimRegexp = regexp.MustCompile(`\.[0-9]+`)
+
+func formatTimeAlive(startTime *unversioned.Time) string {
+	//          Uptime
+	// 1y300d20h15m10s
+
+	// Unfortunately, kube has it's own time struct..
+	parsedTime, err := time.Parse("2006-01-02 15:04:05.999999999 -0700 MST", startTime.String())
+	if err != nil {
+		return err.Error()
+	}
+
+	return secondsTrimRegexp.ReplaceAllString(time.Since(parsedTime).String(), "")
+}
+
+func formatProgressBar(percent float64, length int) string {
+	return fmt.Sprintf("[%-*s]", 10, strings.Repeat("|", int(float64(length)*percent)))
 }

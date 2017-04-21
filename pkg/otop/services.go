@@ -1,50 +1,52 @@
 package otop
 
 import (
+	"fmt"
+	"strings"
+
 	"github.com/oatmealraisin/gopenshift/pkg/gopenshift"
 	gc "github.com/rthornton128/goncurses"
+	kapi "k8s.io/kubernetes/pkg/api"
 )
 
 func NewServicesTab(w *gc.Window) *Tab {
-	e := []map[string]string{}
 	panel := gc.NewPanel(w)
 	var t *Tab
 	maxY, maxX := w.MaxYX()
 	subWindow := w.Sub(maxY-1, maxX-1, 2, 0)
 	separators := []int{
 		0,  // the start
-		30, // Name
-		40, // Type
-		60, // Cluster IP
-		80, // Ports
+		13, // Type
+		28, // Cluster IP
+		40, // Ports
 	}
+
+	services := []*kapi.Service{}
 
 	w.Clear()
 	w.ColorOn(colorHeader)
 	w.HLine(0, 0, ' ', maxX)
-	w.MovePrint(0, separators[0], " Name")
-	w.MovePrint(0, separators[1], " Type")
-	w.MovePrint(0, separators[2], " Cluster IP")
-	w.MovePrint(0, separators[3], " Ports")
+	w.MovePrint(0, separators[0], " Type")
+	w.MovePrint(0, separators[1], " Cluster IP")
+	w.MovePrint(0, separators[2], " Ports")
+	w.MovePrint(0, separators[len(separators)-1], " Name")
 	w.ColorOff(colorHeader)
 
 	t = &Tab{
-		Panel:   panel,
-		name:    "Services",
-		entries: e,
+		Panel: panel,
+		name:  "Services",
 		Redraw: func() error {
 			subWindow.Clear()
 			subMaxY, _ := subWindow.MaxYX()
-			for i, entry := range e {
+			for i, service := range services {
 				if i >= subMaxY {
 					return nil
 				}
 
-				subWindow.MovePrint(i, separators[0], " "+entry["NAME"])
-				subWindow.MovePrint(i, separators[1], " "+entry["TYPE"])
-				subWindow.MovePrint(i, separators[2], " "+entry["CLUSTER-IP"])
-				subWindow.MovePrint(i, separators[3], " "+entry["PORTS"])
-				i++
+				subWindow.MovePrint(i, separators[0], fmt.Sprintf(" %s", service.Spec.Type))
+				subWindow.MovePrint(i, separators[1], fmt.Sprintf(" %s", service.Spec.ClusterIP))
+				subWindow.MovePrint(i, separators[2], fmt.Sprintf(" %s", concatPorts(service.Spec.Ports)))
+				subWindow.MovePrint(i, separators[len(separators)-1], fmt.Sprintf(" %s", service.Name))
 			}
 
 			if err := w.Touch(); err != nil {
@@ -54,30 +56,19 @@ func NewServicesTab(w *gc.Window) *Tab {
 			return nil
 		},
 		Update: func(o *gopenshift.OpenShift) error {
-			services, err := o.GetServices()
-			if err != nil {
-				return err
-			}
-
-			e = []map[string]string{}
-			for _, service := range services {
-				portString := ""
-				//for _, port := range service.Spec.Ports {
-				//	portString = append(portString, strings.Join([]string{string(port.Port), string(port.Protocol)}, "/"))
-				//	portString += ","
-				//}
-
-				e = append(e, map[string]string{
-					"NAME":       service.Name,
-					"TYPE":       string(service.Spec.Type),
-					"CLUSTER-IP": service.Spec.ClusterIP,
-					"PORTS":      portString,
-				})
-			}
-
-			return nil
+			var err error
+			services, err = o.GetServices()
+			return err
 		},
 	}
 
 	return t
+}
+
+func concatPorts(ports []kapi.ServicePort) string {
+	result := ""
+	for _, port := range ports {
+		result = fmt.Sprintf("%s%d/%s,", result, port.Port, port.Protocol)
+	}
+	return strings.TrimRight(result, ",")
 }
