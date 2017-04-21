@@ -32,7 +32,7 @@ func NewRoutesTab(w *gc.Window) *Tab {
 		Redraw: func() error {
 			subWindow.Clear()
 			subMaxY, _ := subWindow.MaxYX()
-			for i, route := range routes[:subMaxY] {
+			for i, route := range routes {
 				if i >= subMaxY {
 					return nil
 				}
