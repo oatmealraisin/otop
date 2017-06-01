@@ -53,7 +53,9 @@ func NewPodsTab(w *gc.Window) *Tab {
 				}
 
 				subWindow.MovePrint(i, separators[0], fmt.Sprintf(" %s", string(pod.Status.Phase)))
-				subWindow.MovePrint(i, separators[1], fmt.Sprintf(" %s", formatTimeAlive(pod.Status.StartTime)))
+				if pod.Status.StartTime != nil {
+					subWindow.MovePrint(i, separators[1], fmt.Sprintf(" %s", formatTimeAlive(pod.Status.StartTime)))
+				}
 				subWindow.MovePrint(i, separators[2], fmt.Sprintf(" %s", pod.Name))
 				subWindow.AttrOff(gc.A_DIM)
 				subWindow.AttrOff(gc.A_BOLD)

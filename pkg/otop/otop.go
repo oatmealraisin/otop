@@ -123,7 +123,6 @@ func refresh(o *Otop, exit chan bool, frameRate int64) {
 // time. However, if it starts to take longer, we may want to look into changing
 // this to only initialize the first tab opened.
 func (o *Otop) init() error {
-	fmt.Println("Initializing")
 	user, err := o.OpenShift.WhoAmI()
 	if err != nil {
 		return err

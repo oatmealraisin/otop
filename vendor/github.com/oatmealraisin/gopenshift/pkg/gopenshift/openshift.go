@@ -35,7 +35,7 @@ func New() *OpenShift {
 }
 
 // TODO: Stub
-func (o *OpenShift) Describe() string {
+func (o *OpenShift) Describe(resource, name string) string {
 	return ""
 }
 

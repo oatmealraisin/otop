@@ -37,7 +37,13 @@ func NewDeploymentConfigsTab(w *gc.Window) *Tab {
 				if i >= subMaxY {
 					return nil
 				}
-				subWindow.MovePrint(i, separators[0], fmt.Sprintf(" %s", formatProgressBar(float64(dc.Status.ReadyReplicas)/float64(dc.Status.Replicas), 10)))
+
+				readyPercent := 0.0
+				if dc.Status.Replicas != 0 {
+					readyPercent = float64(dc.Status.ReadyReplicas) / float64(dc.Status.Replicas)
+				}
+
+				subWindow.MovePrint(i, separators[0], fmt.Sprintf(" %s", formatProgressBar(readyPercent, 10)))
 				subWindow.MovePrint(i, separators[len(separators)-1], fmt.Sprintf(" %s", dc.Name))
 			}
 
